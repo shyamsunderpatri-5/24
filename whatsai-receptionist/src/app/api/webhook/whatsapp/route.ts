@@ -1,9 +1,11 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { verifyWebhookSignature, parseMessages, WebhookPayload } from '@/lib/whatsapp/webhook-parser';
 import { whatsappClient } from '@/lib/whatsapp/client';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { decrypt } from '@/lib/utils/encryption';
 import { sarvamAI } from '@/lib/ai/sarvam';
+
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
