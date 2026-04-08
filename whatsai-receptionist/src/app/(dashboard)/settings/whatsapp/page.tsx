@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 export default function WhatsAppSettings() {
   return (
     <div className="max-w-3xl mt-6 lg:mt-0">

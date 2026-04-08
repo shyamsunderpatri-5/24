@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server';
 import { format } from 'date-fns';
 import { AddAppointmentButton } from '@/components/dashboard/AddAppointmentButton';
