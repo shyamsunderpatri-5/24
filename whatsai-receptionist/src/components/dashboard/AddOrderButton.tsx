@@ -1,0 +1,24 @@
+'use client'
+
+import { useState } from 'react';
+import { AddOrderModal } from './AddOrderModal';
+
+export function AddOrderButton({ products }: { products: any[] }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <>
+      <button 
+        onClick={() => setIsOpen(true)}
+        className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg shadow hover:bg-blue-700 transition"
+      >
+        + New Sale
+      </button>
+      <AddOrderModal 
+        isOpen={isOpen} 
+        onClose={() => setIsOpen(false)} 
+        products={products}
+      />
+    </>
+  );
+}
