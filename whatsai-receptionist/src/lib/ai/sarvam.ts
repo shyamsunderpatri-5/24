@@ -14,7 +14,7 @@ export class SarvamAI {
   // Transcribe Voice Note to Text
   async speechToText(audioBuffer: Buffer, mimeType: string): Promise<SarvamSTTResponse> {
     const formData = new FormData();
-    const blob = new Blob([audioBuffer], { type: mimeType });
+    const blob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
     formData.append('file', blob, 'audio.ogg');
     
     // In production we would specify prompt or language hints per Sarvam docs
