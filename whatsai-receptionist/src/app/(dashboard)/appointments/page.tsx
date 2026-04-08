@@ -6,16 +6,26 @@ export default async function AppointmentsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
+  if (!user) return <div>Unauthorized</div>;
+
   const { data: business } = await supabase
     .from('businesses')
     .select('id')
-    .eq('owner_user_id', user?.id)
+    .eq('owner_user_id', user.id)
     .single();
+
+  if (!business) return <div>Please complete onboarding first.</div>;
 
   const { data: services } = await supabase
     .from('services')
     .select('*')
     .eq('business_id', business.id);
+
+  const { data: appointments } = await supabase
+    .from('appointments')
+    .select('*, customers(name, phone), services(name)')
+    .eq('business_id', business.id)
+    .order('appointment_at', { ascending: true });
 
   return (
     <div className="space-y-6">
