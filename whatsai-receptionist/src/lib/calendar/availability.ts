@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabase/admin';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { addMinutes, isBefore, parseISO, set, isAfter } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 
@@ -15,12 +15,12 @@ export async function getAvailableSlots(
   staffId?: string
 ): Promise<TimeSlot[]> {
   // 1. Get business and timezone
-  const { data: business } = await supabaseAdmin.from('businesses').select('timezone').eq('id', businessId).single();
+  const { data: business } = await getSupabaseAdmin().from('businesses').select('timezone').eq('id', businessId).single();
   const timezone = business?.timezone || 'Asia/Kolkata';
 
   // 2. Get business hours for that day
   const dayOfWeek = requestedDate.getDay(); // 0 is Sunday
-  const { data: hours } = await supabaseAdmin
+  const { data: hours } = await getSupabaseAdmin()
     .from('business_hours')
     .select('*')
     .eq('business_id', businessId)
@@ -38,7 +38,7 @@ export async function getAvailableSlots(
   const endOfDay = set(zonedRequestedDate, { hours: closeH, minutes: closeM, seconds: 0, milliseconds: 0 });
 
   // 3. Get confirmed appointments
-  const { data: appointments } = await supabaseAdmin
+  const { data: appointments } = await getSupabaseAdmin()
     .from('appointments')
     .select('appointment_at, duration_mins')
     .eq('business_id', businessId)
@@ -49,7 +49,7 @@ export async function getAvailableSlots(
   // 4. Get service duration
   let durationMins = 30;
   if (serviceId) {
-    const { data: service } = await supabaseAdmin.from('services').select('duration_mins').eq('id', serviceId).single();
+    const { data: service } = await getSupabaseAdmin().from('services').select('duration_mins').eq('id', serviceId).single();
     if (service) durationMins = service.duration_mins;
   }
 

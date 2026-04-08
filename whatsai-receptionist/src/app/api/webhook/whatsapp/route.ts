@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { verifyWebhookSignature, parseMessages, WebhookPayload } from '@/lib/whatsapp/webhook-parser';
 import { whatsappClient } from '@/lib/whatsapp/client';
-import { supabaseAdmin } from '@/lib/supabase/admin';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { decrypt } from '@/lib/utils/encryption';
 import { sarvamAI } from '@/lib/ai/sarvam';
 
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
 
     for (const { phoneNumberId, message, customerName } of parsedMessages) {
       // 1. Deduplicate by message.id
-      const { data: existingMsg } = await supabaseAdmin
+      const { data: existingMsg } = await getSupabaseAdmin()
         .from('messages')
         .select('id')
         .eq('wa_message_id', message.id)
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       if (existingMsg) continue; // Already processed
 
       // 2. Find business by phone_number_id
-      const { data: business, error: bizError } = await supabaseAdmin
+      const { data: business, error: bizError } = await getSupabaseAdmin()
         .from('businesses')
         .select('*')
         .eq('phone_number_id', phoneNumberId)
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       const phone = message.from; 
 
       // 3. Find or create customer
-      let { data: customer } = await supabaseAdmin
+      let { data: customer } = await getSupabaseAdmin()
         .from('customers')
         .select('*')
         .eq('business_id', business.id)
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
         .single();
 
       if (!customer) {
-        const { data: newCustomer } = await supabaseAdmin
+        const { data: newCustomer } = await getSupabaseAdmin()
           .from('customers')
           .insert({ business_id: business.id, phone, name: customerName })
           .select().single();
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       }
 
       // 4. Find or create conversation
-      let { data: conversation } = await supabaseAdmin
+      let { data: conversation } = await getSupabaseAdmin()
         .from('conversations')
         .select('*')
         .eq('business_id', business.id)
@@ -86,13 +86,13 @@ export async function POST(request: Request) {
         .single();
 
       if (!conversation) {
-        const { data: newConv } = await supabaseAdmin
+        const { data: newConv } = await getSupabaseAdmin()
           .from('conversations')
           .insert({ business_id: business.id, customer_id: customer.id, status: 'active' })
           .select().single();
         conversation = newConv;
       } else {
-        await supabaseAdmin.from('conversations').update({ last_message_at: new Date().toISOString() }).eq('id', conversation.id);
+        await getSupabaseAdmin().from('conversations').update({ last_message_at: new Date().toISOString() }).eq('id', conversation.id);
       }
 
       // 5. Store inbound message
@@ -106,14 +106,14 @@ export async function POST(request: Request) {
       const isOptOut = ['stop', 'unsubscribe', 'hiye', 'band karo'].includes(content.toLowerCase().trim());
       
       if (isOptOut) {
-        await supabaseAdmin.from('customers').update({ is_blocked: true }).eq('id', customer.id);
+        await getSupabaseAdmin().from('customers').update({ is_blocked: true }).eq('id', customer.id);
         const optOutReply = "You have been unsubscribed. Reply START to re-enable.";
         const accessToken = business.access_token_encrypted ? decrypt(business.access_token_encrypted) : '';
         await whatsappClient.sendTextMessage(phone, optOutReply, phoneNumberId, accessToken);
         continue;
       }
 
-      const { data: savedMessage } = await supabaseAdmin.from('messages').insert({
+      const { data: savedMessage } = await getSupabaseAdmin().from('messages').insert({
         conversation_id: conversation.id,
         business_id: business.id,
         direction: 'inbound',
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
       }).select().single();
 
       // Update visit count
-      await supabaseAdmin.from('customers').update({ 
+      await getSupabaseAdmin().from('customers').update({ 
         total_visits: (customer.total_visits || 0) + 1,
         last_visit_at: new Date().toISOString()
       }).eq('id', customer.id);
@@ -147,7 +147,7 @@ export async function POST(request: Request) {
            const audioBuffer = await whatsappClient.downloadMedia(message.audio.id, accessToken);
            const transcription = await sarvamAI.speechToText(audioBuffer, 'audio/ogg');
            userText = transcription.transcript;
-           await supabaseAdmin.from('messages').update({ content: userText }).eq('id', savedMessage.id);
+           await getSupabaseAdmin().from('messages').update({ content: userText }).eq('id', savedMessage.id);
         } catch (sttError) {
            console.error('STT_FAILED', sttError);
            userText = '[Audio could not be transcribed]';
@@ -158,7 +158,7 @@ export async function POST(request: Request) {
 
       // Call the Brain
       const { aiBrain } = await import('@/lib/ai/brain');
-      const { data: history } = await supabaseAdmin
+      const { data: history } = await getSupabaseAdmin()
         .from('messages')
         .select('*')
         .eq('conversation_id', conversation.id)
@@ -184,7 +184,7 @@ export async function POST(request: Request) {
       await whatsappClient.sendTextMessage(phone, finalReply, phoneNumberId, accessToken);
 
       // 8. Store outbound message
-      await supabaseAdmin.from('messages').insert({
+      await getSupabaseAdmin().from('messages').insert({
         conversation_id: conversation.id,
         business_id: business.id,
         direction: 'outbound',
@@ -198,7 +198,7 @@ export async function POST(request: Request) {
 
       // 9. Update conversation status
       if (brainResult.shouldEscalateToHuman) {
-        await supabaseAdmin.from('conversations').update({ is_human_taking_over: true, status: 'human_takeover' }).eq('id', conversation.id);
+        await getSupabaseAdmin().from('conversations').update({ is_human_taking_over: true, status: 'human_takeover' }).eq('id', conversation.id);
       }
     }
 

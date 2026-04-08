@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase/admin';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { whatsappClient } from '@/lib/whatsapp/client';
 import { format } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+  const supabase = getSupabaseAdmin();
   // Protect with cron secret
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const { data: reminders, error } = await supabaseAdmin
+    const { data: reminders, error } = await supabase
       .from('reminders')
       .select('*, appointments(*, customers(*), businesses(*, access_token_encrypted, phone_number_id))')
       .eq('status', 'pending')
@@ -45,16 +46,16 @@ export async function GET(request: Request) {
           business.access_token_encrypted || ''
         );
         
-        await supabaseAdmin.from('reminders').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', reminder.id);
+        await getSupabaseAdmin().from('reminders').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', reminder.id);
         
         // Also update the appointment boolean
-        if (reminder.type === '24h') await supabaseAdmin.from('appointments').update({ reminder_24h_sent: true }).eq('id', appointment.id);
-        if (reminder.type === '2h') await supabaseAdmin.from('appointments').update({ reminder_2h_sent: true }).eq('id', appointment.id);
+        if (reminder.type === '24h') await getSupabaseAdmin().from('appointments').update({ reminder_24h_sent: true }).eq('id', appointment.id);
+        if (reminder.type === '2h') await getSupabaseAdmin().from('appointments').update({ reminder_2h_sent: true }).eq('id', appointment.id);
 
         processedCount++;
       } catch (err) {
         console.error(`Failed sending reminder ${reminder.id}`, err);
-        await supabaseAdmin.from('reminders').update({ status: 'failed' }).eq('id', reminder.id);
+        await getSupabaseAdmin().from('reminders').update({ status: 'failed' }).eq('id', reminder.id);
       }
     }
 

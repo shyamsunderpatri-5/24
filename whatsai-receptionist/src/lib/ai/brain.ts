@@ -1,7 +1,7 @@
 import { generateText, tool } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { z } from 'zod';
-import { supabaseAdmin } from '@/lib/supabase/admin';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { INTENT_DETECTION_SYSTEM_PROMPT } from '@/prompts/intent-detection';
 import { APPOINTMENT_BOOKING_SYSTEM_PROMPT } from '@/prompts/appointment-booking';
 import { STOCK_INQUIRY_SYSTEM_PROMPT } from '@/prompts/stock-inquiry';
@@ -72,11 +72,11 @@ Guidelines:
             let staffId = undefined;
 
             if (serviceName) {
-              const { data: svc } = await supabaseAdmin.from('services').select('id').eq('business_id', businessId).ilike('name', `%${serviceName}%`).single();
+              const { data: svc } = await getSupabaseAdmin().from('services').select('id').eq('business_id', businessId).ilike('name', `%${serviceName}%`).single();
               serviceId = svc?.id;
             }
             if (staffName) {
-              const { data: stf } = await supabaseAdmin.from('staff').select('id').eq('business_id', businessId).ilike('name', `%${staffName}%`).single();
+              const { data: stf } = await getSupabaseAdmin().from('staff').select('id').eq('business_id', businessId).ilike('name', `%${staffName}%`).single();
               staffId = stf?.id;
             }
 
@@ -98,16 +98,16 @@ Guidelines:
             let staffId = null;
 
             if (serviceName) {
-              const { data: svc } = await supabaseAdmin.from('services').select('id').eq('business_id', businessId).ilike('name', `%${serviceName}%`).single();
+              const { data: svc } = await getSupabaseAdmin().from('services').select('id').eq('business_id', businessId).ilike('name', `%${serviceName}%`).single();
               serviceId = svc?.id;
             }
             if (staffName) {
-              const { data: stf } = await supabaseAdmin.from('staff').select('id').eq('business_id', businessId).ilike('name', `%${staffName}%`).single();
+              const { data: stf } = await getSupabaseAdmin().from('staff').select('id').eq('business_id', businessId).ilike('name', `%${staffName}%`).single();
               staffId = stf?.id;
             }
 
             const appointmentAt = new Date(`${date}T${time}:00`);
-            const { data: newAppt } = await supabaseAdmin.from('appointments').insert({
+            const { data: newAppt } = await getSupabaseAdmin().from('appointments').insert({
               business_id: businessId,
               customer_id: customerId,
               service_id: serviceId,
@@ -128,7 +128,7 @@ Guidelines:
             productName: z.string()
           }),
           execute: async ({ productName }: { productName: string }) => {
-            const { data: products } = await supabaseAdmin
+            const { data: products } = await getSupabaseAdmin()
               .from('products')
               .select('*')
               .eq('business_id', businessId)
@@ -146,7 +146,7 @@ Guidelines:
             notes: z.string().optional()
           }),
           execute: async ({ productName, quantity, notes }: { productName: string, quantity: number, notes?: string }) => {
-            const { data: product } = await supabaseAdmin
+            const { data: product } = await getSupabaseAdmin()
               .from('products')
               .select('*')
               .eq('business_id', businessId)
@@ -155,7 +155,7 @@ Guidelines:
             
             if (!product) return { error: 'Product not found' };
 
-            const { data: order } = await supabaseAdmin
+            const { data: order } = await getSupabaseAdmin()
               .from('orders')
               .insert({
                 business_id: businessId,
