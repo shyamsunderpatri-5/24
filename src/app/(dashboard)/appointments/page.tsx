@@ -1,13 +1,13 @@
-export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server';
 import { format } from 'date-fns';
 import { AddAppointmentButton } from '@/components/dashboard/AddAppointmentButton';
+import { Calendar, User, Clock, MoreHorizontal, ChevronRight } from 'lucide-react';
 
 export default async function AppointmentsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) return <div>Unauthorized</div>;
+  if (!user) return null; // Middleware handles redirect
 
   const { data: business } = await supabase
     .from('businesses')
@@ -15,7 +15,7 @@ export default async function AppointmentsPage() {
     .eq('owner_user_id', user.id)
     .single();
 
-  if (!business) return <div>Please complete onboarding first.</div>;
+  if (!business) return null;
 
   const { data: services } = await supabase
     .from('services')
@@ -29,60 +29,92 @@ export default async function AppointmentsPage() {
     .order('appointment_at', { ascending: true });
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-800">Appointments</h2>
-          <p className="text-sm text-slate-500">Manage your daily schedule and bookings.</p>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight">Appointments</h1>
+          <p className="text-slate-500 font-medium">Coordinate your schedule and manage customer bookings.</p>
         </div>
         <AddAppointmentButton services={services || []} />
       </div>
 
-      <div className="bg-white rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.02)] border border-slate-100 overflow-hidden">
-        <table className="w-full text-left text-sm text-slate-600">
-          <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold uppercase text-[10px] tracking-wider">
-            <tr>
-              <th className="px-6 py-4">Date & Time</th>
-              <th className="px-6 py-4">Customer</th>
-              <th className="px-6 py-4">Service</th>
-              <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {appointments?.map((apt: any) => (
-              <tr key={apt.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition">
-                <td className="px-6 py-4 font-medium text-slate-800">
-                  {format(new Date(apt.appointment_at), 'dd MMM yyyy, hh:mm a')}
-                </td>
-                <td className="px-6 py-4">
-                  <div className="font-medium text-slate-700">{apt.customers?.name || 'Unknown'}</div>
-                  <div className="text-xs text-slate-400">{apt.customers?.phone}</div>
-                </td>
-                <td className="px-6 py-4">{apt.services?.name || 'General'}</td>
-                <td className="px-6 py-4">
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${
-                    apt.status === 'confirmed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
-                    apt.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                    'bg-slate-50 text-slate-600 border-slate-100'
-                  }`}>
-                    {apt.status.toUpperCase()}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <button className="text-blue-600 font-medium hover:text-blue-700 transition">Edit</button>
-                </td>
+      <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-[0_8px_30px_rgba(0,0,0,0.02)] overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-slate-50">
+                <th className="px-8 py-6 text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Schedule</th>
+                <th className="px-8 py-6 text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Customer</th>
+                <th className="px-8 py-6 text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Service</th>
+                <th className="px-8 py-6 text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Status</th>
+                <th className="px-8 py-6 text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] text-right">Action</th>
               </tr>
-            ))}
-            {(!appointments || appointments.length === 0) && (
-              <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
-                  No appointments found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {appointments?.map((apt: any) => (
+                <tr key={apt.id} className="group hover:bg-blue-50/30 transition-colors duration-200">
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                        <Clock className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-800 tabular-nums">
+                          {format(new Date(apt.appointment_at), 'hh:mm a')}
+                        </p>
+                        <p className="text-[11px] font-black text-slate-400 uppercase">
+                          {format(new Date(apt.appointment_at), 'dd MMM yyyy')}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-500 flex items-center justify-center font-bold text-sm">
+                        {apt.customers?.name?.[0] || 'C'}
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-800">{apt.customers?.name || 'Walk-in'}</p>
+                        <p className="text-xs text-slate-400 font-medium">{apt.customers?.phone}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className="px-4 py-1.5 bg-slate-50 text-slate-600 rounded-full text-xs font-bold border border-slate-100 group-hover:bg-white group-hover:border-blue-100 transition-all">
+                      {apt.services?.name || 'Standard Service'}
+                    </span>
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full border ${
+                      apt.status === 'confirmed' 
+                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                        : apt.status === 'pending'
+                        ? 'bg-amber-50 text-amber-600 border-amber-100'
+                        : 'bg-slate-50 text-slate-500 border-slate-100'
+                    }`}>
+                      {apt.status}
+                    </span>
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all">
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        
+        {(!appointments || appointments.length === 0) && (
+          <div className="text-center py-24">
+             <div className="w-16 h-16 bg-slate-50 text-slate-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
+               <Calendar className="w-8 h-8" />
+             </div>
+             <p className="text-slate-400 font-bold">No appointments found.</p>
+             <p className="text-xs text-slate-400 mt-1">New bookings will appear here automatically.</p>
+          </div>
+        )}
       </div>
     </div>
   );

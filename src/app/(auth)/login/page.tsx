@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-// import { createClient } from '@/lib/supabase/client';
+import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 
 export default function LoginPage() {
@@ -18,11 +18,12 @@ export default function LoginPage() {
     setError('');
     
     try {
-        // const supabase = createClient();
-        // const { error } = await supabase.auth.signInWithPassword({ email, password });
-        // if (error) throw error;
+        const supabase = createClient();
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
         
         router.push('/dashboard');
+        router.refresh();
     } catch (err: any) {
         setError(err.message);
     } finally {
