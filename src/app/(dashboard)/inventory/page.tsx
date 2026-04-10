@@ -9,12 +9,15 @@ import {
   AlertTriangle,
   FileDown
 } from 'lucide-react';
+import { redirect } from 'next/navigation';
 
 export default async function InventoryPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) return null;
+  if (!user) {
+    redirect('/login');
+  }
 
   const { data: business } = await supabase
     .from('businesses')
@@ -22,7 +25,9 @@ export default async function InventoryPage() {
     .eq('owner_user_id', user.id)
     .single();
 
-  if (!business) return null;
+  if (!business) {
+    redirect('/onboarding');
+  }
 
   const { data: products } = await supabase
     .from('products')

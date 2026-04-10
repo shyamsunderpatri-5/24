@@ -2,22 +2,44 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 
 export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [businessName, setBusinessName] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
     
-    setTimeout(() => {
+    try {
+        const supabase = createClient();
+        const { error } = await supabase.auth.signUp({ 
+            email, 
+            password,
+            options: {
+                data: {
+                    business_name: businessName
+                }
+            }
+        });
+        if (error) throw error;
+        
+        // After signup, Supabase often automatically signs the user in (depending on settings)
+        // or requires email confirmation. For this flow, we'll try to push to dashboard.
         router.push('/dashboard');
-    }, 1000);
+        router.refresh();
+    } catch (err: any) {
+        setError(err.message);
+    } finally {
+        setLoading(false);
+    }
   };
 
   return (
@@ -25,6 +47,8 @@ export default function SignupPage() {
       <div className="m-auto w-full max-w-md p-8 bg-white/70 backdrop-blur-xl border border-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
         <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 mb-2">Get Started</h2>
         <p className="text-slate-500 mb-8">Setup your 24/7 AI Receptionist</p>
+
+        {error && <div className="p-3 mb-4 text-sm text-red-500 bg-red-50 rounded-lg">{error}</div>}
 
         <form onSubmit={handleSignup} className="space-y-5">
           <div>
@@ -65,7 +89,7 @@ export default function SignupPage() {
             disabled={loading}
             className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-medium shadow-md transition-all active:scale-[0.98]"
           >
-            {loading ? 'Creating...' : 'Create Account'}
+            {loading ? 'Creating Account...' : 'Create Account'}
           </button>
         </form>
 

@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 
 export async function createManualAppointment(formData: {
   customerName: string;
@@ -161,4 +162,52 @@ export async function createManualOrder(formData: {
 
   revalidatePath('/orders');
   revalidatePath('/dashboard');
+}
+
+import { cookies, headers } from 'next/headers';
+
+export async function createBusiness(formData: FormData) {
+  const cookieStore = await cookies();
+  const headersList = await headers();
+  console.log('DEBUG: Cookie header:', headersList.get('cookie'));
+  console.log('DEBUG: cookies in action:', cookieStore.getAll().map(c => c.name));
+
+  const supabase = await createClient();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+  console.log('DEBUG: createBusiness action called');
+  console.log('DEBUG: user found:', !!user);
+  if (userError) console.error('DEBUG: userError:', userError);
+
+  if (!user) throw new Error('Unauthorized');
+
+  const name = formData.get('name') as string;
+  const type = formData.get('type') as string;
+  const address = formData.get('address') as string;
+
+  const { data, error } = await supabase
+    .from('businesses')
+    .insert([
+      { 
+        owner_user_id: user.id,
+        name: name || 'My Business',
+        type: type || 'other',
+        greeting_message: `Namaste! Welcome to ${name || 'our business'}. How can we help you today?`
+      }
+    ])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating business:', error);
+    return;
+  }
+
+  revalidatePath('/dashboard');
+  redirect('/onboarding/setup');
+}
+export async function handleLogout() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect('/login');
 }

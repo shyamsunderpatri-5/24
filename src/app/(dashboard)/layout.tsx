@@ -10,13 +10,19 @@ import {
   Search,
   User
 } from 'lucide-react';
+import { createClient } from '@/lib/supabase/server';
+import { handleLogout } from './actions/legacy-actions';
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   const navItems = [
-    { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Appointments', href: '/appointments', icon: Calendar },
-    { name: 'Conversations', href: '/conversations', icon: MessageSquare },
-    { name: 'Inventory', href: '/inventory', icon: Package },
+    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Shared Inbox', href: '/inbox', icon: MessageSquare },
+    { name: 'Flow Builder', href: '/flows', icon: Package },
+    { name: 'Campaigns', href: '/campaigns', icon: Bell },
+    { name: 'Contacts', href: '/contacts', icon: User },
     { name: 'Settings', href: '/settings', icon: Settings },
   ];
 
@@ -49,10 +55,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
 
         <div className="p-4 border-t border-slate-100">
-          <button className="flex items-center gap-3 w-full px-4 py-3 text-sm font-semibold rounded-xl text-red-500 hover:bg-red-50 transition-all">
-            <LogOut className="w-5 h-5" />
-            Logout
-          </button>
+          <form action={handleLogout}>
+            <button type="submit" className="flex items-center gap-3 w-full px-4 py-3 text-sm font-semibold rounded-xl text-red-500 hover:bg-red-50 transition-all">
+              <LogOut className="w-5 h-5" />
+              Logout
+            </button>
+          </form>
         </div>
       </aside>
 
@@ -72,11 +80,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
             <div className="flex items-center gap-3 pl-6 border-l border-slate-200">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-bold text-slate-800 leading-tight">Admin User</p>
-                <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Business Owner</p>
+                <p className="text-sm font-bold text-slate-800 leading-tight">
+                  {user?.email?.split('@')[0] || 'Business Owner'}
+                </p>
+                <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
+                  {user?.email || 'Administrator'}
+                </p>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-sm font-bold shadow-lg shadow-blue-500/20 ring-2 ring-white">
-                <User className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-sm font-bold shadow-lg shadow-blue-500/20 ring-2 ring-white uppercase">
+                {user?.email?.[0] || 'A'}
               </div>
             </div>
           </div>

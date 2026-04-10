@@ -2,12 +2,15 @@ import { createClient } from '@/lib/supabase/server';
 import { format } from 'date-fns';
 import { AddAppointmentButton } from '@/components/dashboard/AddAppointmentButton';
 import { Calendar, User, Clock, MoreHorizontal, ChevronRight } from 'lucide-react';
+import { redirect } from 'next/navigation';
 
 export default async function AppointmentsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) return null; // Middleware handles redirect
+  if (!user) {
+    redirect('/login');
+  }
 
   const { data: business } = await supabase
     .from('businesses')
@@ -15,7 +18,9 @@ export default async function AppointmentsPage() {
     .eq('owner_user_id', user.id)
     .single();
 
-  if (!business) return null;
+  if (!business) {
+    redirect('/onboarding');
+  }
 
   const { data: services } = await supabase
     .from('services')

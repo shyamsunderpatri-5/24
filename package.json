@@ -25,6 +25,8 @@
     "razorpay": "^2.9.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "reactflow": "^11.11.4",
+    "recharts": "^3.8.1",
     "resend": "^4.0.0",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",

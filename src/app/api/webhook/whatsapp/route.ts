@@ -34,65 +34,80 @@ export async function POST(request: Request) {
     const parsedMessages = parseMessages(payload);
 
     if (parsedMessages.length === 0) {
-      return NextResponse.json({ status: 'ok' }, { status: 200 }); // Status update or unsupported
+      return NextResponse.json({ status: 'ok' }, { status: 200 });
     }
 
+    const supabase = getSupabaseAdmin();
+
     for (const { phoneNumberId, message, customerName } of parsedMessages) {
-      // 1. Deduplicate by message.id
-      const { data: existingMsg } = await getSupabaseAdmin()
+      // 1. Deduplicate
+      const { data: existingMsg } = await supabase
         .from('messages')
         .select('id')
         .eq('wa_message_id', message.id)
         .single();
         
-      if (existingMsg) continue; // Already processed
+      if (existingMsg) continue;
 
-      // 2. Find business by phone_number_id
-      const { data: business, error: bizError } = await getSupabaseAdmin()
-        .from('businesses')
-        .select('*')
+      // 2. Find WhatsApp Number and Workspace
+      const { data: waNumber, error: waError } = await supabase
+        .from('whatsapp_numbers')
+        .select('*, workspaces(*)')
         .eq('phone_number_id', phoneNumberId)
         .single();
 
-      if (!business || !business.is_active || bizError) {
-         console.error(`BUSINESS_ERROR: Business not active or not found for phone_number_id=${phoneNumberId}`);
+      if (!waNumber || waError) {
+         console.error(`WEBHOOK_ERROR: WhatsApp Number not found for phone_number_id=${phoneNumberId}`);
          continue;
       }
       
+      const workspaceId = waNumber.workspace_id;
       const phone = message.from; 
 
-      // 3. Find or create customer
-      let { data: customer } = await getSupabaseAdmin()
-        .from('customers')
+      // 3. Find or create contact
+      let { data: contact } = await supabase
+        .from('contacts')
         .select('*')
-        .eq('business_id', business.id)
+        .eq('workspace_id', workspaceId)
         .eq('phone', phone)
         .single();
 
-      if (!customer) {
-        const { data: newCustomer } = await getSupabaseAdmin()
-          .from('customers')
-          .insert({ business_id: business.id, phone, name: customerName })
+      if (!contact) {
+        const { data: newContact } = await supabase
+          .from('contacts')
+          .insert({ 
+            workspace_id: workspaceId, 
+            phone, 
+            name: customerName || 'New Contact' 
+          })
           .select().single();
-        customer = newCustomer;
+        contact = newContact;
       }
 
       // 4. Find or create conversation
-      let { data: conversation } = await getSupabaseAdmin()
+      let { data: conversation } = await supabase
         .from('conversations')
         .select('*')
-        .eq('business_id', business.id)
-        .eq('customer_id', customer.id)
+        .eq('workspace_id', workspaceId)
+        .eq('contact_id', contact.id)
+        .eq('whatsapp_number_id', waNumber.id)
         .single();
 
       if (!conversation) {
-        const { data: newConv } = await getSupabaseAdmin()
+        const { data: newConv } = await supabase
           .from('conversations')
-          .insert({ business_id: business.id, customer_id: customer.id, status: 'active' })
+          .insert({ 
+            workspace_id: workspaceId, 
+            contact_id: contact.id, 
+            whatsapp_number_id: waNumber.id,
+            status: 'active' 
+          })
           .select().single();
         conversation = newConv;
       } else {
-        await getSupabaseAdmin().from('conversations').update({ last_message_at: new Date().toISOString() }).eq('id', conversation.id);
+        await supabase.from('conversations')
+          .update({ last_message_at: new Date().toISOString() })
+          .eq('id', conversation.id);
       }
 
       // 5. Store inbound message
@@ -103,110 +118,67 @@ export async function POST(request: Request) {
       else if (message.type === 'image') content = '[Image]';
       else if (message.type === 'audio') content = '[Audio]';
 
-      const isOptOut = ['stop', 'unsubscribe', 'hiye', 'band karo'].includes(content.toLowerCase().trim());
-      
-      if (isOptOut) {
-        await getSupabaseAdmin().from('customers').update({ is_blocked: true }).eq('id', customer.id);
-        const optOutReply = "You have been unsubscribed. Reply START to re-enable.";
-        const accessToken = business.access_token_encrypted ? decrypt(business.access_token_encrypted) : '';
-        await whatsappClient.sendTextMessage(phone, optOutReply, phoneNumberId, accessToken);
-        continue;
-      }
-
-      const { data: savedMessage } = await getSupabaseAdmin().from('messages').insert({
+      await supabase.from('messages').insert({
+        workspace_id: workspaceId,
         conversation_id: conversation.id,
-        business_id: business.id,
         direction: 'inbound',
+        sender_type: 'contact',
         message_type: message.type,
         content: content,
-        wa_message_id: message.id,
-        is_ai_generated: false
-      }).select().single();
+        wa_message_id: message.id
+      });
 
-      // Update visit count
-      await getSupabaseAdmin().from('customers').update({ 
-        total_visits: (customer.total_visits || 0) + 1,
-        last_visit_at: new Date().toISOString()
-      }).eq('id', customer.id);
+      // 6. Update contact last activities
+      await supabase.from('contacts').update({ 
+        last_message_at: new Date().toISOString()
+      }).eq('id', contact.id);
 
-      // 6. Call AI Brain
-      if (conversation.is_human_taking_over || customer.is_blocked) continue;
+      // 7. AI Brain processing (if enabled)
+      if (waNumber.ai_enabled && conversation.status === 'active') {
+        const { aiBrain } = await import('@/lib/ai/brain');
+        const { data: history } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('conversation_id', conversation.id)
+          .order('created_at', { ascending: false })
+          .limit(10);
 
-      if (message.type === 'image') {
-        const replyText = "Currently, I can only process text and voice notes. How else can I help you?";
-        const accessToken = business.access_token_encrypted ? decrypt(business.access_token_encrypted) : '';
-        await whatsappClient.sendTextMessage(phone, replyText, phoneNumberId, accessToken);
-        continue;
-      }
+        const brainResult = await aiBrain.processMessage({
+          message: content,
+          workspaceId: workspaceId,
+          contactId: contact.id,
+          conversationHistory: history || [],
+          workspaceConfig: waNumber.workspaces, // Access the joined info
+          contactInfo: contact
+        });
 
-      // Handle text and audio
-      let userText = content;
-      if (message.type === 'audio' && message.audio?.id) {
-        try {
-           const accessToken = business.access_token_encrypted ? decrypt(business.access_token_encrypted) : '';
-           const audioBuffer = await whatsappClient.downloadMedia(message.audio.id, accessToken);
-           const transcription = await sarvamAI.speechToText(audioBuffer, 'audio/ogg');
-           userText = transcription.transcript;
-           await getSupabaseAdmin().from('messages').update({ content: userText }).eq('id', savedMessage.id);
-        } catch (sttError) {
-           console.error('STT_FAILED', sttError);
-           userText = '[Audio could not be transcribed]';
+        // 8. Send AI Reply
+        const accessToken = waNumber.access_token; // Assumes it's decrypted or handled
+        await whatsappClient.sendTextMessage(phone, brainResult.reply, phoneNumberId, accessToken);
+
+        // 9. Store outbound message
+        await supabase.from('messages').insert({
+          workspace_id: workspaceId,
+          conversation_id: conversation.id,
+          direction: 'outbound',
+          sender_type: 'bot',
+          message_type: 'text',
+          content: brainResult.reply,
+          is_ai_generated: true
+        });
+
+        // 10. Escalate if needed
+        if (brainResult.shouldEscalateToHuman) {
+          await supabase.from('conversations')
+            .update({ status: 'human_takeover' })
+            .eq('id', conversation.id);
         }
-      }
-
-      if (!userText) continue;
-
-      // Call the Brain
-      const { aiBrain } = await import('@/lib/ai/brain');
-      const { data: history } = await getSupabaseAdmin()
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', conversation.id)
-        .order('sent_at', { ascending: false })
-        .limit(10);
-
-      const brainResult = await aiBrain.processMessage({
-        message: userText,
-        businessId: business.id,
-        customerId: customer.id,
-        conversationHistory: history || [],
-        businessConfig: business,
-        customerInfo: customer
-      });
-
-      // 7. Send AI Reply with DPDP Consent Footer if first time
-      let finalReply = brainResult.reply;
-      if (customer.total_visits === 0) {
-        finalReply += `\n\n---\nBy continuing, you agree to context-sharing as per DPDP Act 2023. Reply STOP to opt-out.`;
-      }
-
-      const accessToken = business.access_token_encrypted ? decrypt(business.access_token_encrypted) : '';
-      await whatsappClient.sendTextMessage(phone, finalReply, phoneNumberId, accessToken);
-
-      // 8. Store outbound message
-      await getSupabaseAdmin().from('messages').insert({
-        conversation_id: conversation.id,
-        business_id: business.id,
-        direction: 'outbound',
-        message_type: 'text',
-        content: finalReply,
-        ai_intent: brainResult.intent,
-        ai_entities: brainResult.entitiesExtracted,
-        is_ai_generated: true,
-        processing_status: 'processed'
-      });
-
-      // 9. Update conversation status
-      if (brainResult.shouldEscalateToHuman) {
-        await getSupabaseAdmin().from('conversations').update({ is_human_taking_over: true, status: 'human_takeover' }).eq('id', conversation.id);
       }
     }
 
     return NextResponse.json({ status: 'ok' }, { status: 200 });
-
   } catch (error) {
     console.error('Webhook processing error:', error);
-    // Always return 200 OK to WhatsApp so Meta doesn't retry
     return NextResponse.json({ status: 'error handled' }, { status: 200 }); 
   }
 }
