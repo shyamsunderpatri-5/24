@@ -1,6 +1,8 @@
 {
-  "crons": [{
-    "path": "/api/reminders/process",
-    "schedule": "0 0 * * *"
-  }]
+  "version": 2,
+  "framework": "nextjs",
+  "regions": ["cle1"],
+  "env": {
+    "WHATSAPP_API_VERSION": "v21.0"
+  }
 }
